@@ -18,14 +18,10 @@ export default function Login () {
             e.preventDefault()
             setLoading(true)
             setError('')
-            const data = await axios.post(
-                'http://localhost:8000/api/auth/login',
-                {
-                    email, password
-                },
-                {
-                    withCredentials: true
-                }
+            const { data } = await axios.post(
+              'http://localhost:8000/api/auth/login',
+              { email, password },
+              { withCredentials: true }
             )
             login(data.user, data.accessToken)
             navigate('/dashboard')
