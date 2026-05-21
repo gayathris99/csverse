@@ -4,6 +4,8 @@ const cookieParser = require('cookie-parser')
 require('dotenv').config()
 const pool = require('./config/db')
 const authRoutes = require('./routes/auth')
+const csvRoutes = require('./routes/csv')
+const verifyToken = require('./middleware/auth')
 
 const app = express()
 
@@ -18,6 +20,8 @@ app.use(express.json())
 app.use(cookieParser())
 
 app.use('/api/auth', authRoutes)
+app.use('/api/csv', verifyToken, csvRoutes)
+
 
 app.get('/health', (req, res) => {
     res.json({ status: 'OK'})

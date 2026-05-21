@@ -1,12 +1,75 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import Papa from 'papaparse'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { suggestQuestions } from '../api/index'
+
+function VirtualTable({ headers, rows }) {
+  const parentRef = useRef(null)
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 36,
+    overscan: 5
+  })
+
+  const colWidth = '120px'
+
+  return (
+    <div ref={parentRef} className="overflow-auto max-h-64">
+      <div style={{ minWidth: `${headers.length * 120}px` }}>
+        <div className="flex border-b border-[#2a2a3e] sticky top-0 bg-[#1a1a2e] z-10">
+          {headers.map((h, i) => (
+            <div
+              key={i}
+              style={{ width: colWidth, minWidth: colWidth }}
+              className="text-gray-400 py-2 pr-4 text-xs font-medium truncate flex-shrink-0"
+            >
+              {h}
+            </div>
+          ))}
+        </div>
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const row = rows[virtualRow.index]
+            return (
+              <div
+                key={virtualRow.index}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  transform: `translateY(${virtualRow.start}px)`,
+                  width: '100%'
+                }}
+                className="flex border-b border-[#2a2a3e]/50"
+              >
+                {headers.map((h, j) => (
+                  <div
+                    key={j}
+                    style={{ width: colWidth, minWidth: colWidth }}
+                    className="text-gray-300 py-2 pr-4 text-xs truncate flex-shrink-0"
+                  >
+                    {String(row[h] ?? '')}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Upload() {
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [csvData, setCsvData] = useState(null)
+  const [questions, setQuestions] = useState(null)
+  const [loadingQuestions, setLoadingQuestions] = useState(false)
   const fileInputRef = useRef(null)
-  const navigate = useNavigate()
 
   function handleDragOver(e) {
     e.preventDefault()
@@ -35,7 +98,51 @@ export default function Upload() {
       return
     }
     setError('')
+    setCsvData(null)
+    setQuestions(null)
     setFile(file)
+  }
+
+  function parseCSV(file) {
+    setParsing(true)
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: true,
+      complete: (result) => {
+        setParsing(false)
+        if (result.errors.length > 0) {
+          setError(result.errors[0].message)
+          return
+        }
+        setCsvData({
+          headers: result.meta.fields || [],
+          rows: result.data || [],
+          rowCount: result.data.length || 0
+        })
+      },
+      error: (err) => {
+        setParsing(false)
+        setError(err.message)
+      }
+    })
+  }
+
+  async function handleGenerateQuestions() {
+    setLoadingQuestions(true)
+    setError('')
+    try {
+      const result = await suggestQuestions(
+        file.name,
+        csvData.headers,
+        csvData.rows
+      )
+      setQuestions(result.questions)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to generate questions')
+    } finally {
+      setLoadingQuestions(false)
+    }
   }
 
   return (
@@ -76,8 +183,8 @@ export default function Upload() {
         </p>
       )}
 
-      {/* File preview */}
-      {file && (
+      {/* File info */}
+      {file && !csvData && (
         <div className="mt-4 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-2xl">📄</span>
@@ -95,10 +202,62 @@ export default function Upload() {
         </div>
       )}
 
-      {file && (
-        <button className="mt-4 w-full bg-brand-600 text-brand-50 py-3 rounded-xl font-medium text-sm hover:bg-brand-800 transition">
-          Analyze CSV
+      {/* Analyze button */}
+      {file && !csvData && (
+        <button
+          onClick={() => parseCSV(file)}
+          disabled={parsing}
+          className="mt-4 w-full bg-brand-600 text-brand-50 py-3 rounded-xl font-medium text-sm hover:bg-brand-800 transition disabled:opacity-50"
+        >
+          {parsing ? 'Parsing...' : 'Analyze CSV'}
         </button>
+      )}
+
+      {/* Preview table */}
+      {csvData && csvData.headers && (
+        <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white font-medium">Preview</h2>
+            <span className="text-xs text-gray-400">
+              {csvData.rowCount} rows · {csvData.headers.length} columns
+            </span>
+          </div>
+          <VirtualTable headers={csvData.headers} rows={csvData.rows} />
+        </div>
+      )}
+
+      {/* Generate questions button */}
+      {csvData && !questions && (
+        <button
+          onClick={handleGenerateQuestions}
+          disabled={loadingQuestions}
+          className="mt-4 w-full bg-brand-600 text-brand-50 py-3 rounded-xl font-medium text-sm hover:bg-brand-800 transition disabled:opacity-50"
+        >
+          {loadingQuestions ? 'Generating questions...' : 'Generate AI Questions →'}
+        </button>
+      )}
+
+      {/* AI Questions */}
+      {questions && (
+        <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <span>✨</span>
+            <h2 className="text-white font-medium">AI Suggested Questions</h2>
+          </div>
+          <div className="flex flex-col gap-2">
+            {questions.map((q, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between bg-[#0f0f13] border border-[#2a2a3e] rounded-lg px-4 py-3 cursor-pointer hover:border-brand-600 hover:bg-brand-900/20 transition"
+              >
+                <span className="text-gray-300 text-sm">{q.question}</span>
+                <span className="text-xs text-brand-400 border border-brand-800 px-2 py-1 rounded-md ml-4 flex-shrink-0">
+                  {q.chart_type}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )
