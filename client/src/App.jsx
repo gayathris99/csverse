@@ -4,6 +4,8 @@ import axios from 'axios'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
+import Upload from './pages/Upload'
+import History from './pages/History'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import useAuthStore from './context/AuthContext'
@@ -49,6 +51,16 @@ function App() {
               <Dashboard />
             </ProtectedRoute>
           } />
+          <Route path='/upload' element={
+            <ProtectedRoute>
+              <Upload/>
+            </ProtectedRoute>
+          }/>
+          <Route path='/history' element={
+            <ProtectedRoute>
+              <History/>
+            </ProtectedRoute>
+          }/>
         </Route>
       </Routes>
     </BrowserRouter>
