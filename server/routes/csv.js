@@ -44,4 +44,49 @@ router.post('/suggest-questions', async (req, res) => {
     }
 })
 
+router.post('/ask', async (req, res) => {
+    const { question, chartType, headers, rows, filename } = req.body
+  
+    try {
+      const dataStr = JSON.stringify(rows, null, 2)
+  
+      const response = await client.chat.completions.create({
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a senior data analyst. You are given CSV data and a question. 
+  Analyze the data and respond with valid JSON only, no extra text, no markdown.
+  Format:
+  {
+    "insight": "plain english explanation of the answer",
+    "chartData": {
+      "labels": ["label1", "label2"],
+      "datasets": [{
+        "label": "dataset label",
+        "data": [10, 20, 30]
+      }]
+    }
+  }
+  chartData must follow Chart.js format exactly.`
+          },
+          {
+            role: 'user',
+            content: `Filename: ${filename}
+  Question: ${question}
+  Chart type: ${chartType}
+  Columns: ${headers.join(', ')}
+  Data:\n${dataStr}`
+          }
+        ]
+      })
+  
+      const text = response.choices[0].message.content
+      const parsed = JSON.parse(text)
+      res.json(parsed)
+    } catch (error) {
+      res.status(500).json({ detail: error.message })
+    }
+  })
+
 module.exports = router

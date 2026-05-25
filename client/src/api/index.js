@@ -24,3 +24,14 @@ export async function suggestQuestions(filename, headers, sampleRows) {
   })
   return data
 }
+
+export async function askQuestion(question, chartType, filename, headers, rows) {
+    const { data } = await api.post('/csv/ask', {
+      question,
+      chartType,
+      filename,
+      headers,
+      rows
+    })
+    return data
+  }
