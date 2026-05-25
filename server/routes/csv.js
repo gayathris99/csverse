@@ -1,5 +1,6 @@
 const express = require('express')
 const router = express.Router()
+const pool = require('../config/db')
 const OpenAI = require('openai')
 
 const client = new OpenAI({
@@ -43,7 +44,7 @@ chart_type must be one of: bar, line, pie`
   }
 })
 
-// Answer a question and generate chart data
+// Answer a question
 router.post('/ask', async (req, res) => {
   const { question, chartType, headers, rows, filename } = req.body
 
@@ -86,6 +87,72 @@ Data:\n${dataStr}`
     const text = response.choices[0].message.content
     const parsed = JSON.parse(text)
     res.json(parsed)
+
+  } catch (error) {
+    res.status(500).json({ detail: error.message })
+  }
+})
+
+// Save a query
+router.post('/save-query', async (req, res) => {
+  const { question, chartType, insight, chartData, filename, rowCount, headers } = req.body
+  const userId = req.user.id
+
+  try {
+    let fileResult = await pool.query(
+      'SELECT id FROM csv_files WHERE user_id = $1 AND original_name = $2',
+      [userId, filename]
+    )
+
+    let fileId
+    if (fileResult.rows.length === 0) {
+      const newFile = await pool.query(
+        'INSERT INTO csv_files (user_id, filename, original_name, row_count, columns) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [userId, filename, filename, rowCount, JSON.stringify(headers)]
+      )
+      fileId = newFile.rows[0].id
+    } else {
+      fileId = fileResult.rows[0].id
+    }
+
+    const result = await pool.query(
+      'INSERT INTO queries (user_id, file_id, question, answer, chart_type, chart_data) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [userId, fileId, question, insight, chartType, JSON.stringify(chartData)]
+    )
+
+    res.json(result.rows[0])
+  } catch (error) {
+    res.status(500).json({ detail: error.message })
+  }
+})
+
+// Get all queries for current user
+router.get('/queries', async (req, res) => {
+  const userId = req.user.id
+  try {
+    const result = await pool.query(
+      `SELECT q.*, f.original_name as filename 
+       FROM queries q
+       JOIN csv_files f ON q.file_id = f.id
+       WHERE q.user_id = $1
+       ORDER BY q.created_at DESC`,
+      [userId]
+    )
+    res.json(result.rows)
+  } catch (error) {
+    res.status(500).json({ detail: error.message })
+  }
+})
+
+// Get recent files for current user
+router.get('/files', async (req, res) => {
+  const userId = req.user.id
+  try {
+    const result = await pool.query(
+      'SELECT * FROM csv_files WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5',
+      [userId]
+    )
+    res.json(result.rows)
   } catch (error) {
     res.status(500).json({ detail: error.message })
   }

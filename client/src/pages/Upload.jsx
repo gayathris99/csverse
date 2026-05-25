@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { suggestQuestions, askQuestion } from '../api/index'
+import { suggestQuestions, askQuestion, saveQuery } from '../api/index'
 import ChartDisplay from '../components/ChartDisplay'
 
 function VirtualTable({ headers, rows }) {
@@ -63,6 +64,9 @@ function VirtualTable({ headers, rows }) {
 }
 
 export default function Upload() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const fileFromDashboard = searchParams.get('file')
+
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
@@ -75,6 +79,15 @@ export default function Upload() {
   const [loadingChart, setLoadingChart] = useState(false)
   const [customQuestion, setCustomQuestion] = useState('')
   const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    if (fileFromDashboard) {
+      const timer = setTimeout(() => {
+        setSearchParams({})
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [fileFromDashboard])
 
   function handleDragOver(e) {
     e.preventDefault()
@@ -165,11 +178,19 @@ export default function Upload() {
         csvData.headers,
         csvData.rows
       )
-      setSelectedQuestion({
-        ...q,
-        chart_type: result.chart_type || q.chart_type
-      })
+      const finalChartType = result.chart_type || q.chart_type
+      setSelectedQuestion({ ...q, chart_type: finalChartType })
       setChartResult(result)
+
+      await saveQuery(
+        q.question,
+        finalChartType,
+        result.insight,
+        result.chartData,
+        file.name,
+        csvData.rowCount,
+        csvData.headers
+      )
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate chart')
     } finally {
@@ -189,7 +210,12 @@ export default function Upload() {
       <h1 className="text-white text-xl font-semibold mb-1">Upload a CSV</h1>
       <p className="text-gray-400 text-sm mb-6">We'll analyze your data and suggest questions</p>
 
-      {/* Upload zone */}
+      {fileFromDashboard && !csvData && (
+        <div className="mb-4 bg-brand-900/20 border border-brand-800 rounded-xl px-4 py-3 text-brand-300 text-sm">
+          Upload <span className="font-medium">{fileFromDashboard}</span> again to continue your analysis
+        </div>
+      )}
+
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -222,7 +248,6 @@ export default function Upload() {
         </p>
       )}
 
-      {/* File info */}
       {file && !csvData && (
         <div className="mt-4 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -241,7 +266,6 @@ export default function Upload() {
         </div>
       )}
 
-      {/* Analyze button */}
       {file && !csvData && (
         <button
           onClick={() => parseCSV(file)}
@@ -252,7 +276,6 @@ export default function Upload() {
         </button>
       )}
 
-      {/* Preview table */}
       {csvData && csvData.headers && (
         <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
@@ -265,7 +288,6 @@ export default function Upload() {
         </div>
       )}
 
-      {/* Generate questions button */}
       {csvData && !questions && (
         <button
           onClick={handleGenerateQuestions}
@@ -276,7 +298,6 @@ export default function Upload() {
         </button>
       )}
 
-      {/* AI Questions */}
       {questions && (
         <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4">
           <div className="flex items-center gap-2 mb-4">
@@ -304,7 +325,6 @@ export default function Upload() {
         </div>
       )}
 
-      {/* Custom question input */}
       {csvData && (
         <div className="mt-4 flex gap-2">
           <input
@@ -325,7 +345,6 @@ export default function Upload() {
         </div>
       )}
 
-      {/* Loading chart */}
       {loadingChart && (
         <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-6">
           <div className="flex items-center gap-3">
@@ -335,7 +354,6 @@ export default function Upload() {
         </div>
       )}
 
-      {/* Chart result */}
       {chartResult && !loadingChart && (
         <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-6">
           <h2 className="text-white font-medium mb-1">{selectedQuestion?.question}</h2>

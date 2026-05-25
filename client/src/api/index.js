@@ -26,12 +26,35 @@ export async function suggestQuestions(filename, headers, sampleRows) {
 }
 
 export async function askQuestion(question, chartType, filename, headers, rows) {
-    const { data } = await api.post('/csv/ask', {
-      question,
-      chartType,
-      filename,
-      headers,
-      rows
-    })
-    return data
-  }
+  const { data } = await api.post('/csv/ask', {
+    question,
+    chartType,
+    filename,
+    headers,
+    rows
+  })
+  return data
+}
+
+export async function saveQuery(question, chartType, insight, chartData, filename, rowCount, headers) {
+  const { data } = await api.post('/csv/save-query', {
+    question,
+    chartType,
+    insight,
+    chartData,
+    filename,
+    rowCount,
+    headers
+  })
+  return data
+}
+
+export async function fetchQueries() {
+  const { data } = await api.get('/csv/queries')
+  return data
+}
+
+export async function fetchFiles() {
+  const { data } = await api.get('/csv/files')
+  return data
+}
