@@ -1,8 +1,7 @@
 import { useState, useRef } from 'react'
 import Papa from 'papaparse'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { suggestQuestions } from '../api/index'
-import { askQuestion } from '../api/index'
+import { suggestQuestions, askQuestion } from '../api/index'
 import ChartDisplay from '../components/ChartDisplay'
 
 function VirtualTable({ headers, rows }) {
@@ -71,10 +70,11 @@ export default function Upload() {
   const [csvData, setCsvData] = useState(null)
   const [questions, setQuestions] = useState(null)
   const [loadingQuestions, setLoadingQuestions] = useState(false)
-  const fileInputRef = useRef(null)
   const [selectedQuestion, setSelectedQuestion] = useState(null)
   const [chartResult, setChartResult] = useState(null)
   const [loadingChart, setLoadingChart] = useState(false)
+  const [customQuestion, setCustomQuestion] = useState('')
+  const fileInputRef = useRef(null)
 
   function handleDragOver(e) {
     e.preventDefault()
@@ -105,28 +105,9 @@ export default function Upload() {
     setError('')
     setCsvData(null)
     setQuestions(null)
-    setFile(file)
-  }
-
-  async function handleQuestionClick(q) {
-    setSelectedQuestion(q)
     setChartResult(null)
-    setLoadingChart(true)
-    setError('')
-    try {
-      const result = await askQuestion(
-        q.question,
-        q.chart_type,
-        file.name,
-        csvData.headers,
-        csvData.rows
-      )
-      setChartResult(result)
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to generate chart')
-    } finally {
-      setLoadingChart(false)
-    }
+    setSelectedQuestion(null)
+    setFile(file)
   }
 
   function parseCSV(file) {
@@ -169,6 +150,38 @@ export default function Upload() {
     } finally {
       setLoadingQuestions(false)
     }
+  }
+
+  async function handleQuestionClick(q) {
+    setSelectedQuestion(q)
+    setChartResult(null)
+    setLoadingChart(true)
+    setError('')
+    try {
+      const result = await askQuestion(
+        q.question,
+        q.chart_type,
+        file.name,
+        csvData.headers,
+        csvData.rows
+      )
+      setSelectedQuestion({
+        ...q,
+        chart_type: result.chart_type || q.chart_type
+      })
+      setChartResult(result)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to generate chart')
+    } finally {
+      setLoadingChart(false)
+    }
+  }
+
+  async function handleCustomQuestion() {
+    if (!customQuestion.trim()) return
+    const q = { question: customQuestion, chart_type: 'auto' }
+    setCustomQuestion('')
+    await handleQuestionClick(q)
   }
 
   return (
@@ -266,52 +279,76 @@ export default function Upload() {
       {/* AI Questions */}
       {questions && (
         <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4">
             <span>✨</span>
             <h2 className="text-white font-medium">AI Suggested Questions</h2>
-            </div>
-            <div className="flex flex-col gap-2">
+          </div>
+          <div className="flex flex-col gap-2">
             {questions.map((q, i) => (
-                <div
+              <div
                 key={i}
                 onClick={() => handleQuestionClick(q)}
                 className={`flex items-center justify-between border rounded-lg px-4 py-3 cursor-pointer transition ${
-                    selectedQuestion?.question === q.question
+                  selectedQuestion?.question === q.question
                     ? 'border-brand-600 bg-brand-900/30'
                     : 'bg-[#0f0f13] border-[#2a2a3e] hover:border-brand-600 hover:bg-brand-900/20'
                 }`}
-                >
+              >
                 <span className="text-gray-300 text-sm">{q.question}</span>
                 <span className="text-xs text-brand-400 border border-brand-800 px-2 py-1 rounded-md ml-4 flex-shrink-0">
-                    {q.chart_type}
+                  {q.chart_type}
                 </span>
-                </div>
+              </div>
             ))}
-            </div>
+          </div>
         </div>
       )}
 
-    {loadingChart && (
-    <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-6">
-        <div className="flex items-center gap-3">
-        <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin"></div>
-        <span className="text-gray-400 text-sm">Analyzing your data...</span>
+      {/* Custom question input */}
+      {csvData && (
+        <div className="mt-4 flex gap-2">
+          <input
+            type="text"
+            value={customQuestion}
+            onChange={(e) => setCustomQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCustomQuestion()}
+            placeholder="Ask your own question about this data..."
+            className="flex-1 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent"
+          />
+          <button
+            onClick={handleCustomQuestion}
+            disabled={loadingChart || !customQuestion.trim()}
+            className="bg-brand-600 text-brand-50 px-6 py-3 rounded-xl font-medium text-sm hover:bg-brand-800 transition disabled:opacity-50"
+          >
+            Ask
+          </button>
         </div>
-    </div>
-    )}
+      )}
 
-    {chartResult && !loadingChart && (
-    <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-6">
-        <h2 className="text-white font-medium mb-1">{selectedQuestion?.question}</h2>
-        <p className="text-gray-400 text-sm mb-6">{chartResult.insight}</p>
-        <div className="max-w-lg mx-auto">
-        <ChartDisplay
-            chartType={selectedQuestion?.chart_type}
-            chartData={chartResult.chartData}
-        />
+      {/* Loading chart */}
+      {loadingChart && (
+        <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-gray-400 text-sm">Analyzing your data...</span>
+          </div>
         </div>
-    </div>
-    )}
+      )}
+
+      {/* Chart result */}
+      {chartResult && !loadingChart && (
+        <div className="mt-6 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-6">
+          <h2 className="text-white font-medium mb-1">{selectedQuestion?.question}</h2>
+          <p className="text-gray-400 text-sm mb-6">{chartResult.insight}</p>
+          <div className="max-w-lg mx-auto">
+            <ChartDisplay
+              chartType={selectedQuestion?.chart_type}
+              chartData={chartResult.chartData}
+            />
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
