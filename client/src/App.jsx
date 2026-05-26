@@ -18,7 +18,7 @@ function App() {
     async function tryRefresh() {
       try {
         const { data } = await axios.post(
-          'http://localhost:8000/api/auth/refresh',
+          `${import.meta.env.VITE_API_URL}/auth/refresh`,
           {},
           { withCredentials: true }
         )

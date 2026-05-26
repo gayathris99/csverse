@@ -17,7 +17,7 @@ export default function Signup() {
     setLoading(true)
     setError('')
     try {
-      await axios.post('http://localhost:8000/api/auth/signup', form)
+      await axios.post(`${import.meta.env.VITE_API_URL}/auth/signup`, form)
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.detail || 'Signup failed')
